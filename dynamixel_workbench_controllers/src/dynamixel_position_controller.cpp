@@ -37,7 +37,7 @@ DynamixelPositionController::DynamixelPositionController()
 
   dxl_wb_ = new DynamixelWorkbench;
 
-  jnt_tra_msg_.reset(new trajectory_msgs::JointTrajectory());
+  //jnt_tra_msg_.reset(new trajectory_msgs::JointTrajectory());
 }
 
 DynamixelPositionController::~DynamixelPositionController() {}
@@ -221,7 +221,6 @@ bool DynamixelPositionController::initSDKHandlers(void)
   {
     ROS_INFO("%s", log);
   }
-  
 
   if (dxl_wb_->getProtocolVersion() == 2.0f)
   {
@@ -263,7 +262,7 @@ void DynamixelPositionController::moveCallback(const std_msgs::Float64::ConstPtr
 
   dxl_wb_->torqueOn(2);
   auto &states = dynamixel_state_list_.dynamixel_state;
-  for(auto &state : states)
+  for (auto &state : states)
   {
     state.set_velocity = dxl_wb_->convertVelocity2Value(state.id, 0.2);
     state.set_position = dxl_wb_->convertRadian2Value(state.id, msg->data * toRad);
@@ -344,7 +343,7 @@ void DynamixelPositionController::readCallback(const ros::TimerEvent &)
       if (result == false)
       {
         ROS_ERROR("%s", log);
-      }     
+      }
 
       for (uint8_t index = 0; index < id_cnt; index++)
       {
@@ -381,17 +380,17 @@ void DynamixelPositionController::readCallback(const ros::TimerEvent &)
     }
 
     //First run, fetch the goal position
-    if(!init_done)
+    if (!init_done)
     {
       init_done = true;
       for (auto &state : states)
       {
         int32_t temp_data;
         result = dxl_wb_->itemRead(state.id, "Goal_Position", &temp_data, &log);
-        if (result == false)        
-          ROS_ERROR("%s", log);        
+        if (result == false)
+          ROS_ERROR("%s", log);
         else
-          state.set_position = temp_data; 
+          state.set_position = temp_data;
 
         result = dxl_wb_->itemRead(state.id, "Goal_Velocity", &temp_data, &log);
         if (result == false)
@@ -418,14 +417,38 @@ void DynamixelPositionController::writeCallback(const ros::TimerEvent &)
   const char *log = NULL;
 
   std::vector<uint8_t> id_array;
-  
 
   std::vector<int32_t> dynamixel_position;
   std::vector<int32_t> dynamixel_velocity;
 
   static uint32_t point_cnt = 0;
-  static uint32_t position_cnt = 0;  
- 
+  static uint32_t position_cnt = 0;
+
+  if (!jnt_tra_msg_.joint_names.empty() && !jnt_tra_msg_.points.empty())
+  {
+    auto pt = jnt_tra_msg_.points.front();
+    auto &state = this->getJointState(jnt_tra_msg_.joint_names.front());
+    state.set_position = dxl_wb_->convertRadian2Value(state.id, pt.positions[0]);
+    state.set_velocity = dxl_wb_->convertVelocity2Value(state.id, pt.velocities[0]);
+  }
+
+  if (!jnt_tra_msg_.points.empty() && this->dynsAtSetPositions())
+  {
+    traj_mtx_.lock();
+    jnt_tra_msg_.points.erase(jnt_tra_msg_.points.begin());
+    traj_mtx_.unlock();
+
+    ROS_INFO_STREAM("Done with a move");
+
+    if (!jnt_tra_msg_.joint_names.empty() && !jnt_tra_msg_.points.empty())
+    {
+      auto pt = jnt_tra_msg_.points.front();
+      auto &state = this->getJointState(jnt_tra_msg_.joint_names.front());
+      state.set_position = dxl_wb_->convertRadian2Value(state.id, pt.positions[0]);
+      state.set_velocity = dxl_wb_->convertVelocity2Value(state.id, pt.velocities[0]);
+    }
+  }
+
   for (auto &state : states)
   {
     id_array.push_back(state.id);
@@ -434,7 +457,7 @@ void DynamixelPositionController::writeCallback(const ros::TimerEvent &)
   }
 
   result = dxl_wb_->syncWrite(SYNC_WRITE_HANDLER_FOR_GOAL_VELOCITY, id_array.data(), id_array.size(), dynamixel_velocity.data(), 1, &log);
-  if (result == false)  
+  if (result == false)
     ROS_ERROR("%s", log);
 
   result = dxl_wb_->syncWrite(SYNC_WRITE_HANDLER_FOR_GOAL_POSITION, id_array.data(), id_array.size(), dynamixel_position.data(), 1, &log);
@@ -466,6 +489,10 @@ bool DynamixelPositionController::dynamixelCommandMsgCallback(dynamixel_workbenc
 
 void DynamixelPositionController::trajectoryMsgCallback(const trajectory_msgs::JointTrajectory::ConstPtr &msg)
 {
+  this->traj_mtx_.lock();
+  last_jnt_tra_msg_ = msg;
+  jnt_tra_msg_ = *msg;
+  this->traj_mtx_.unlock();
 }
 
 dynamixel_workbench_msgs::DynamixelState &DynamixelPositionController::getJointState(const std::string &name)
@@ -479,9 +506,10 @@ dynamixel_workbench_msgs::DynamixelState &DynamixelPositionController::getJointS
 
 bool DynamixelPositionController::dynsAtSetPositions()
 {
-  for(auto &&state : dynamixel_state_list_.dynamixel_state)
+  for (auto &&state : dynamixel_state_list_.dynamixel_state)
   {
-    if(abs(state.present_position - state.set_position) > this->position_tol_)
+    auto tol = dxl_wb_->convertRadian2Value(state.id, position_tol_);
+    if (abs(state.present_position - state.set_position) > tol)
       return false;
   }
   return true;

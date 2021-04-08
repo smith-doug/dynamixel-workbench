@@ -84,7 +84,8 @@ private:
 
   double position_tol_;
 
-  trajectory_msgs::JointTrajectory::Ptr jnt_tra_msg_;
+  trajectory_msgs::JointTrajectory jnt_tra_msg_;
+  trajectory_msgs::JointTrajectory::ConstPtr last_jnt_tra_msg_;
 
   double read_period_;
   double write_period_;
@@ -93,6 +94,7 @@ private:
   bool is_moving_;
 
   std::mutex state_mtx_;
+  std::mutex traj_mtx_;
 
 public:
   DynamixelPositionController();
