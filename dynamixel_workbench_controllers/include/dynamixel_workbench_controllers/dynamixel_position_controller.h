@@ -34,6 +34,7 @@
 #include <dynamixel_workbench_msgs/DynamixelCommand.h>
 
 #include <mutex>
+#include <std_msgs/Float64.h>
 
 // SYNC_WRITE_HANDLER
 #define SYNC_WRITE_HANDLER_FOR_GOAL_POSITION 0
@@ -64,8 +65,8 @@ private:
   ros::Publisher joint_states_pub_;
 
   // ROS Topic Subscriber
-  ros::Subscriber cmd_vel_sub_;
   ros::Subscriber trajectory_sub_;
+  ros::Subscriber move_sub_;  //For testing
 
   // ROS Service Server
   ros::ServiceServer dynamixel_command_server_;
@@ -123,7 +124,9 @@ public:
   bool dynamixelCommandMsgCallback(dynamixel_workbench_msgs::DynamixelCommand::Request &req,
                                    dynamixel_workbench_msgs::DynamixelCommand::Response &res);
 
-  bool DynsAtSetPositions();
+  void moveCallback(const std_msgs::Float64::ConstPtr &msg);
+
+  bool dynsAtSetPositions();
   void updateSetPositions(const std::vector<uint8_t> &id_array, const std::vector<int32_t> &dynamixel_position);
 
   dynamixel_workbench_msgs::DynamixelState &getJointState(const std::string &name);

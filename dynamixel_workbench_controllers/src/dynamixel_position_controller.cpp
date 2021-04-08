@@ -18,6 +18,7 @@
 /* Modified by: Douglas Smith */
 
 #include "dynamixel_workbench_controllers/dynamixel_position_controller.h"
+#include <std_msgs/Float64.h>
 
 double toRad = M_PI / 180.0;
 double toDeg = 180.0 / M_PI;
@@ -220,6 +221,7 @@ bool DynamixelPositionController::initSDKHandlers(void)
   {
     ROS_INFO("%s", log);
   }
+  
 
   if (dxl_wb_->getProtocolVersion() == 2.0f)
   {
@@ -253,6 +255,19 @@ void DynamixelPositionController::initPublisher()
 void DynamixelPositionController::initSubscriber()
 {
   trajectory_sub_ = priv_node_handle_.subscribe("joint_trajectory", 100, &DynamixelPositionController::trajectoryMsgCallback, this);
+  move_sub_ = priv_node_handle_.subscribe("move_me", 100, &DynamixelPositionController::moveCallback, this);
+}
+
+void DynamixelPositionController::moveCallback(const std_msgs::Float64::ConstPtr &msg)
+{
+
+  dxl_wb_->torqueOn(2);
+  auto &states = dynamixel_state_list_.dynamixel_state;
+  for(auto &state : states)
+  {
+    state.set_velocity = dxl_wb_->convertVelocity2Value(state.id, 0.2);
+    state.set_position = dxl_wb_->convertRadian2Value(state.id, msg->data * toRad);
+  }
 }
 
 void DynamixelPositionController::initServer()
@@ -365,6 +380,7 @@ void DynamixelPositionController::readCallback(const ros::TimerEvent &)
       }
     }
 
+    //First run, fetch the goal position
     if(!init_done)
     {
       init_done = true;
@@ -372,18 +388,23 @@ void DynamixelPositionController::readCallback(const ros::TimerEvent &)
       {
         int32_t temp_data;
         result = dxl_wb_->itemRead(state.id, "Goal_Position", &temp_data, &log);
-        if (result == false)
-        {
-          ROS_ERROR("%s", log);
-        }
+        if (result == false)        
+          ROS_ERROR("%s", log);        
         else
-          state.set_position = temp_data;
+          state.set_position = temp_data; 
+
+        result = dxl_wb_->itemRead(state.id, "Goal_Velocity", &temp_data, &log);
+        if (result == false)
+          ROS_ERROR("%s", log);
+        else
+          state.set_velocity = temp_data;
       }
     }
 #ifndef DEBUG
   }
 #endif
 }
+
 void DynamixelPositionController::publishCallback(const ros::TimerEvent &)
 {
   dynamixel_state_list_pub_.publish(dynamixel_state_list_);
@@ -391,6 +412,34 @@ void DynamixelPositionController::publishCallback(const ros::TimerEvent &)
 
 void DynamixelPositionController::writeCallback(const ros::TimerEvent &)
 {
+  auto &states = dynamixel_state_list_.dynamixel_state;
+
+  bool result = false;
+  const char *log = NULL;
+
+  std::vector<uint8_t> id_array;
+  
+
+  std::vector<int32_t> dynamixel_position;
+  std::vector<int32_t> dynamixel_velocity;
+
+  static uint32_t point_cnt = 0;
+  static uint32_t position_cnt = 0;  
+ 
+  for (auto &state : states)
+  {
+    id_array.push_back(state.id);
+    dynamixel_position.push_back(state.set_position);
+    dynamixel_velocity.push_back(state.set_velocity);
+  }
+
+  result = dxl_wb_->syncWrite(SYNC_WRITE_HANDLER_FOR_GOAL_VELOCITY, id_array.data(), id_array.size(), dynamixel_velocity.data(), 1, &log);
+  if (result == false)  
+    ROS_ERROR("%s", log);
+
+  result = dxl_wb_->syncWrite(SYNC_WRITE_HANDLER_FOR_GOAL_POSITION, id_array.data(), id_array.size(), dynamixel_position.data(), 1, &log);
+  if (result == false)
+    ROS_ERROR("%s", log);
 }
 
 bool DynamixelPositionController::dynamixelCommandMsgCallback(dynamixel_workbench_msgs::DynamixelCommand::Request &req,
@@ -426,6 +475,16 @@ dynamixel_workbench_msgs::DynamixelState &DynamixelPositionController::getJointS
     if (state.name.compare(name) == 0)
       return state;
   }
+}
+
+bool DynamixelPositionController::dynsAtSetPositions()
+{
+  for(auto &&state : dynamixel_state_list_.dynamixel_state)
+  {
+    if(abs(state.present_position - state.set_position) > this->position_tol_)
+      return false;
+  }
+  return true;
 }
 
 int main(int argc, char **argv)
