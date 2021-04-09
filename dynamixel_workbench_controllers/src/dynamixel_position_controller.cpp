@@ -27,6 +27,7 @@ DynamixelPositionController::DynamixelPositionController()
     : node_handle_(""),
       priv_node_handle_("~"),
       is_moving_(false),
+      init_done_(false),
       as_(priv_node_handle_, "pos_move_dynamixel", false)
 {
 
@@ -292,7 +293,6 @@ void DynamixelPositionController::readCallback(const ros::TimerEvent &)
   bool result = false;
 
   const char *log = NULL;
-  static bool init_done = false;
 
   for (auto &state : dynamixel_state_list_.dynamixel_state)
   {
@@ -385,9 +385,8 @@ void DynamixelPositionController::readCallback(const ros::TimerEvent &)
     }
 
     //First run, fetch the goal position
-    if (!init_done)
+    if (!init_done_)
     {
-      init_done = true;
       for (auto &state : states)
       {
         int32_t temp_data;
@@ -404,6 +403,7 @@ void DynamixelPositionController::readCallback(const ros::TimerEvent &)
           state.set_velocity = temp_data;
       }
     }
+    init_done_ = true;
 #ifndef DEBUG
   }
 #endif
@@ -457,7 +457,7 @@ bool DynamixelPositionController::writeSetVals(StateMsg *state, double pos, doub
 
 void DynamixelPositionController::writeCallback(const ros::TimerEvent &)
 {
-  if (!jnt_tra_msg_)
+  if (!jnt_tra_msg_ || !init_done_)
     return;
 
   auto &states = dynamixel_state_list_.dynamixel_state;

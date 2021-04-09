@@ -102,6 +102,7 @@ private:
   double pub_period_;
 
   bool is_moving_;
+  bool init_done_;
 
   std::mutex state_mtx_;
   std::mutex traj_mtx_;
