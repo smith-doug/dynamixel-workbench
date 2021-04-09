@@ -36,6 +36,7 @@ DynamixelPositionController::DynamixelPositionController()
   position_tol_ = 0.1 * toRad;
 
   dxl_wb_ = new DynamixelWorkbench;
+  jnt_tra_msg_ = boost::make_shared<trajectory_msgs::JointTrajectory>();
 
   //jnt_tra_msg_.reset(new trajectory_msgs::JointTrajectory());
 }
@@ -411,6 +412,9 @@ void DynamixelPositionController::publishCallback(const ros::TimerEvent &)
 
 void DynamixelPositionController::writeCallback(const ros::TimerEvent &)
 {
+  if (!jnt_tra_msg_)
+    return;
+
   auto &states = dynamixel_state_list_.dynamixel_state;
 
   bool result = false;
@@ -424,29 +428,63 @@ void DynamixelPositionController::writeCallback(const ros::TimerEvent &)
   static uint32_t point_cnt = 0;
   static uint32_t position_cnt = 0;
 
-  if (!jnt_tra_msg_.joint_names.empty() && !jnt_tra_msg_.points.empty())
+  std::vector<StateMsg *> used_states;
+
+  std::lock_guard<std::mutex> lock(traj_mtx_);
+
+  // for (auto &name : jnt_tra_msg_->joint_names)
+  // {
+  //   auto *state = getJointState(name);
+  //   if (!state)
+  //   {
+  //     ROS_ERROR_STREAM("Invalid joint name.  Discarding trajectory");
+  //     jnt_tra_msg_.reset(new trajectory_msgs::JointTrajectory);
+  //     return;
+  //   }
+  //   used_states.push_back(state);
+  // }
+
+  // for (int i = 0; i < used_states.size(); i++)
+  // {
+
+  // }
+
+  if (!jnt_tra_msg_->joint_names.empty() && !jnt_tra_msg_->points.empty())
   {
-    auto pt = jnt_tra_msg_.points.front();
-    auto &state = this->getJointState(jnt_tra_msg_.joint_names.front());
-    state.set_position = dxl_wb_->convertRadian2Value(state.id, pt.positions[0]);
-    state.set_velocity = dxl_wb_->convertVelocity2Value(state.id, pt.velocities[0]);
+    auto pt = jnt_tra_msg_->points.front();
+    auto *state = this->getJointState(jnt_tra_msg_->joint_names.front());
+    if (state)
+    {
+      state->set_position = dxl_wb_->convertRadian2Value(state->id, pt.positions[0]);
+      state->set_velocity = dxl_wb_->convertVelocity2Value(state->id, pt.velocities[0]);
+      state->remaining_pos = jnt_tra_msg_->points.size();
+    }
   }
 
-  if (!jnt_tra_msg_.points.empty() && this->dynsAtSetPositions())
+  // Remaining points, motors where they should be
+  if (!jnt_tra_msg_->points.empty() && this->dynsAtSetPositions())
   {
-    traj_mtx_.lock();
-    jnt_tra_msg_.points.erase(jnt_tra_msg_.points.begin());
-    traj_mtx_.unlock();
+    jnt_tra_msg_->points.erase(jnt_tra_msg_->points.begin());
 
     ROS_INFO_STREAM("Done with a move");
 
-    if (!jnt_tra_msg_.joint_names.empty() && !jnt_tra_msg_.points.empty())
+    if (!jnt_tra_msg_->joint_names.empty() && !jnt_tra_msg_->points.empty())
     {
-      auto pt = jnt_tra_msg_.points.front();
-      auto &state = this->getJointState(jnt_tra_msg_.joint_names.front());
-      state.set_position = dxl_wb_->convertRadian2Value(state.id, pt.positions[0]);
-      state.set_velocity = dxl_wb_->convertVelocity2Value(state.id, pt.velocities[0]);
+      auto pt = jnt_tra_msg_->points.front();
+      auto *state = this->getJointState(jnt_tra_msg_->joint_names.front());
+      if (state)
+      {
+        state->set_position = dxl_wb_->convertRadian2Value(state->id, pt.positions[0]);
+        state->set_velocity = dxl_wb_->convertVelocity2Value(state->id, pt.velocities[0]);
+        state->remaining_pos = jnt_tra_msg_->points.size();
+      }
     }
+  }
+
+  if (jnt_tra_msg_->points.empty())
+  {
+    for (auto &state : states)
+      state.remaining_pos = 0;
   }
 
   for (auto &state : states)
@@ -489,23 +527,25 @@ bool DynamixelPositionController::dynamixelCommandMsgCallback(dynamixel_workbenc
 
 void DynamixelPositionController::trajectoryMsgCallback(const trajectory_msgs::JointTrajectory::ConstPtr &msg)
 {
-  this->traj_mtx_.lock();
+  std::lock_guard<std::mutex> lock(traj_mtx_);
+
   last_jnt_tra_msg_ = msg;
-  jnt_tra_msg_ = *msg;
-  this->traj_mtx_.unlock();
+  *jnt_tra_msg_ = *msg;
 }
 
-StateMsg &DynamixelPositionController::getJointState(const std::string &name)
+StateMsg *DynamixelPositionController::getJointState(const std::string &name)
 {
   for (auto &state : dynamixel_state_list_.dynamixel_state)
   {
     if (state.name.compare(name) == 0)
-      return state;
+      return &state;
   }
-  std::stringstream ss;
-  ss << "getJointState failed.  No joint named " << name;
+  ROS_ERROR_STREAM("getJointState failed.  No joint named " << name);
+  return nullptr;
+  //std::stringstream ss;
+  //ss << "getJointState failed.  No joint named " << name;
 
-  throw std::runtime_error(ss.str().c_str());
+  //throw std::runtime_error(ss.str().c_str());
 }
 
 bool DynamixelPositionController::dynsAtSetPositions()

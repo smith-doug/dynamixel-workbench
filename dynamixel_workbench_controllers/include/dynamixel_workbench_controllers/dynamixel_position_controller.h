@@ -33,6 +33,11 @@
 #include <dynamixel_workbench_msgs/DynamixelStatePosList.h>
 #include <dynamixel_workbench_msgs/DynamixelCommand.h>
 
+// #include <actionlib/server/simple_action_server.h>
+// #include <actionlib/server/action_server.h>
+// #include <control_msgs/FollowJointTrajectoryAction.h>
+// #include <control_msgs/FollowJointTrajectoryFeedback.h>
+
 #include <mutex>
 #include <std_msgs/Float64.h>
 
@@ -78,6 +83,9 @@ private:
 
   // ROS Service Client
 
+  // ROS Action Server
+  //actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction> as_;
+
   // Dynamixel Workbench Parameters
   DynamixelWorkbench *dxl_wb_;
 
@@ -89,7 +97,7 @@ private:
 
   double position_tol_;
 
-  trajectory_msgs::JointTrajectory jnt_tra_msg_;
+  trajectory_msgs::JointTrajectory::Ptr jnt_tra_msg_;
   trajectory_msgs::JointTrajectory::ConstPtr last_jnt_tra_msg_;
 
   double read_period_;
@@ -125,8 +133,7 @@ public:
   void readCallback(const ros::TimerEvent &);
   void writeCallback(const ros::TimerEvent &);
   void publishCallback(const ros::TimerEvent &);
-
-  void commandVelocityCallback(const geometry_msgs::Twist::ConstPtr &msg);
+  
   void trajectoryMsgCallback(const trajectory_msgs::JointTrajectory::ConstPtr &msg);
   bool dynamixelCommandMsgCallback(dynamixel_workbench_msgs::DynamixelCommand::Request &req,
                                    dynamixel_workbench_msgs::DynamixelCommand::Response &res);
@@ -135,8 +142,9 @@ public:
 
   bool dynsAtSetPositions();
   void updateSetPositions(const std::vector<uint8_t> &id_array, const std::vector<int32_t> &dynamixel_position);
+  
 
-  StateMsg &getJointState(const std::string &name);
+  StateMsg *getJointState(const std::string &name);
 };
 
 #endif //DYNAMIXEL_POSITION_CONTROL_H
