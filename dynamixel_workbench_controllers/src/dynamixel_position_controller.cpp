@@ -26,7 +26,8 @@ double toDeg = 180.0 / M_PI;
 DynamixelPositionController::DynamixelPositionController()
     : node_handle_(""),
       priv_node_handle_("~"),
-      is_moving_(false)
+      is_moving_(false),
+      as_(priv_node_handle_, "pos_move_dynamixel", false)
 {
 
   read_period_ = priv_node_handle_.param<double>("dxl_read_period", 0.010f);
@@ -38,7 +39,10 @@ DynamixelPositionController::DynamixelPositionController()
   dxl_wb_ = new DynamixelWorkbench;
   jnt_tra_msg_ = boost::make_shared<trajectory_msgs::JointTrajectory>();
 
-  //jnt_tra_msg_.reset(new trajectory_msgs::JointTrajectory());
+  as_.registerGoalCallback(boost::bind(&DynamixelPositionController::goalCB, this));
+  as_.registerPreemptCallback(boost::bind(&DynamixelPositionController::cancelCB, this));
+
+  as_.start();
 }
 
 DynamixelPositionController::~DynamixelPositionController() {}
@@ -479,6 +483,8 @@ void DynamixelPositionController::writeCallback(const ros::TimerEvent &)
     auto *state = getJointState(name);
     if (!state)
     {
+      if (as_.isActive())
+        as_.setAborted();
       ROS_ERROR_STREAM("Invalid joint name.  Discarding trajectory");
       jnt_tra_msg_.reset(new trajectory_msgs::JointTrajectory);
       return;
@@ -522,6 +528,9 @@ void DynamixelPositionController::writeCallback(const ros::TimerEvent &)
     // Reset them all to 0, won't hurt anything
     for (auto &state : states)
       state.remaining_pos = 0;
+
+    if (as_.isActive())
+      as_.setSucceeded();
   }
 
   // Need simpler data structs for the sdk calls
@@ -561,6 +570,35 @@ bool DynamixelPositionController::dynamixelCommandMsgCallback(dynamixel_workbenc
   res.comm_result = result;
 
   return true;
+}
+
+void DynamixelPositionController::goalCB()
+{
+
+  std::lock_guard<std::mutex> lock(traj_mtx_);
+  if (as_.isActive() && goal_)
+  {
+    JointTractoryActionServer::Result res;
+
+    as_.setAborted(res, "Goal was active");
+    return;
+  }
+  goal_ = as_.acceptNewGoal();
+  *jnt_tra_msg_ = goal_->trajectory;
+}
+void DynamixelPositionController::cancelCB()
+{
+  ROS_ERROR_STREAM("cancelCb");
+  std::lock_guard<std::mutex> lock(traj_mtx_);
+  jnt_tra_msg_.reset(new trajectory_msgs::JointTrajectory());
+
+  auto &states = dynamixel_state_list_.dynamixel_state;
+
+  for (auto &state : states)
+  {
+    state.set_position = state.present_position;
+  }
+  as_.setPreempted();
 }
 
 void DynamixelPositionController::trajectoryMsgCallback(const trajectory_msgs::JointTrajectory::ConstPtr &msg)

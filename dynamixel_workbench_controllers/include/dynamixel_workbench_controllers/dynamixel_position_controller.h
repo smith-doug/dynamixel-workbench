@@ -33,10 +33,8 @@
 #include <dynamixel_workbench_msgs/DynamixelStatePosList.h>
 #include <dynamixel_workbench_msgs/DynamixelCommand.h>
 
-// #include <actionlib/server/simple_action_server.h>
-// #include <actionlib/server/action_server.h>
-// #include <control_msgs/FollowJointTrajectoryAction.h>
-// #include <control_msgs/FollowJointTrajectoryFeedback.h>
+#include <actionlib/server/simple_action_server.h>
+#include <control_msgs/FollowJointTrajectoryAction.h>
 
 #include <mutex>
 #include <std_msgs/Float64.h>
@@ -58,6 +56,8 @@ typedef struct
 
 using StateMsg = dynamixel_workbench_msgs::DynamixelStatePos;
 using StateListMsg = dynamixel_workbench_msgs::DynamixelStatePosList;
+using JointTractoryActionServer = actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction>;
+
 class DynamixelPositionController
 {
 
@@ -82,7 +82,7 @@ private:
   // ROS Service Client
 
   // ROS Action Server
-  //actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction> as_;
+  actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction> as_;
 
   // Dynamixel Workbench Parameters
   DynamixelWorkbench *dxl_wb_;
@@ -144,6 +144,10 @@ public:
   bool writeSetVals(StateMsg *state, double pos, double vel, int remaining_pos);
 
   StateMsg *getJointState(const std::string &name);
+
+  JointTractoryActionServer::GoalConstPtr goal_;
+  void goalCB();
+  void cancelCB();
 };
 
 #endif //DYNAMIXEL_POSITION_CONTROL_H

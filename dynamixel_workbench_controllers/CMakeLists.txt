@@ -18,6 +18,8 @@ find_package(catkin REQUIRED COMPONENTS
   dynamixel_workbench_msgs
   dynamixel_workbench_toolbox
   cmake_modules
+  control_msgs
+  actionlib
 )
 
 find_package(Eigen3 REQUIRED)
@@ -57,7 +59,7 @@ endif(NOT ${YAML_CPP_VERSION} VERSION_LESS "0.5")
 ################################################################################
 catkin_package(
  INCLUDE_DIRS include
- CATKIN_DEPENDS roscpp sensor_msgs geometry_msgs dynamixel_workbench_msgs trajectory_msgs dynamixel_workbench_toolbox cmake_modules
+ CATKIN_DEPENDS roscpp sensor_msgs geometry_msgs dynamixel_workbench_msgs trajectory_msgs dynamixel_workbench_toolbox cmake_modules control_msgs actionlib
  DEPENDS EIGEN3
 )
 
