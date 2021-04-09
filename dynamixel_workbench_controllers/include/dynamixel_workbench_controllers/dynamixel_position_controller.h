@@ -91,7 +91,6 @@ private:
   std::map<std::string, const ControlItem *> control_items_;
   std::vector<std::pair<std::string, ItemValue>> dynamixel_info_;
   StateListMsg dynamixel_state_list_;
-  sensor_msgs::JointState joint_state_msg_;
 
   double position_tol_;
 

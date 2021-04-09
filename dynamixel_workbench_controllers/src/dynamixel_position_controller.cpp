@@ -408,6 +408,40 @@ void DynamixelPositionController::readCallback(const ros::TimerEvent &)
 void DynamixelPositionController::publishCallback(const ros::TimerEvent &)
 {
   dynamixel_state_list_pub_.publish(dynamixel_state_list_);
+
+  sensor_msgs::JointState joint_state_msg;
+  joint_state_msg.header.stamp = ros::Time::now();
+
+  uint8_t id_cnt = 0;
+  for (auto const &dxl : dynamixel_)
+  {
+    double position = 0.0;
+    double velocity = 0.0;
+    double effort = 0.0;
+
+    joint_state_msg.name.push_back(dxl.first);
+
+    if (dxl_wb_->getProtocolVersion() == 2.0f)
+    {
+      if (strcmp(dxl_wb_->getModelName((uint8_t)dxl.second), "XL-320") == 0)
+        effort = dxl_wb_->convertValue2Load((int16_t)dynamixel_state_list_.dynamixel_state[id_cnt].present_current);
+      else
+        effort = dxl_wb_->convertValue2Current((int16_t)dynamixel_state_list_.dynamixel_state[id_cnt].present_current);
+    }
+    else if (dxl_wb_->getProtocolVersion() == 1.0f)
+      effort = dxl_wb_->convertValue2Load((int16_t)dynamixel_state_list_.dynamixel_state[id_cnt].present_current);
+
+    velocity = dxl_wb_->convertValue2Velocity((uint8_t)dxl.second, (int32_t)dynamixel_state_list_.dynamixel_state[id_cnt].present_velocity);
+    position = dxl_wb_->convertValue2Radian((uint8_t)dxl.second, (int32_t)dynamixel_state_list_.dynamixel_state[id_cnt].present_position);
+
+    joint_state_msg.effort.push_back(effort);
+    joint_state_msg.velocity.push_back(velocity);
+    joint_state_msg.position.push_back(position);
+
+    id_cnt++;
+  }
+
+  joint_states_pub_.publish(joint_state_msg);
 }
 
 bool DynamixelPositionController::writeSetVals(StateMsg *state, double pos, double vel, int remaining_pos)
