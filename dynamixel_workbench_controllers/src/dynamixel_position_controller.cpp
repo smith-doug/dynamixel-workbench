@@ -410,6 +410,13 @@ void DynamixelPositionController::publishCallback(const ros::TimerEvent &)
   dynamixel_state_list_pub_.publish(dynamixel_state_list_);
 }
 
+bool DynamixelPositionController::writeSetVals(StateMsg *state, double pos, double vel, int remaining_pos)
+{
+  state->set_position = dxl_wb_->convertRadian2Value(state->id, pos);
+  state->set_velocity = dxl_wb_->convertVelocity2Value(state->id, vel);
+  state->remaining_pos = remaining_pos;
+}
+
 void DynamixelPositionController::writeCallback(const ros::TimerEvent &)
 {
   if (!jnt_tra_msg_)
@@ -432,61 +439,58 @@ void DynamixelPositionController::writeCallback(const ros::TimerEvent &)
 
   std::lock_guard<std::mutex> lock(traj_mtx_);
 
-  // for (auto &name : jnt_tra_msg_->joint_names)
-  // {
-  //   auto *state = getJointState(name);
-  //   if (!state)
-  //   {
-  //     ROS_ERROR_STREAM("Invalid joint name.  Discarding trajectory");
-  //     jnt_tra_msg_.reset(new trajectory_msgs::JointTrajectory);
-  //     return;
-  //   }
-  //   used_states.push_back(state);
-  // }
+  // Find which states are relevant and store pointers to them
+  for (auto &name : jnt_tra_msg_->joint_names)
+  {
+    auto *state = getJointState(name);
+    if (!state)
+    {
+      ROS_ERROR_STREAM("Invalid joint name.  Discarding trajectory");
+      jnt_tra_msg_.reset(new trajectory_msgs::JointTrajectory);
+      return;
+    }
+    used_states.push_back(state);
+  }
 
-  // for (int i = 0; i < used_states.size(); i++)
-  // {
-
-  // }
-
-  if (!jnt_tra_msg_->joint_names.empty() && !jnt_tra_msg_->points.empty())
+  // This section is somewhat awkward, calling writeSetVals twice.  Motors need to be updated with their new set position before dynsAtSetPosition is called.
+  // I can imagine a condition where the motor gets spun to position x, then a command comes in to move to position x.
+  // It would actually be at its set position but if it didn't get fed the new one because it was waiting for the motor
+  // to be at the old set position something weird might happen.
+  if (!jnt_tra_msg_->points.empty())
   {
     auto pt = jnt_tra_msg_->points.front();
-    auto *state = this->getJointState(jnt_tra_msg_->joint_names.front());
-    if (state)
+    for (int i = 0; i < used_states.size(); i++)
     {
-      state->set_position = dxl_wb_->convertRadian2Value(state->id, pt.positions[0]);
-      state->set_velocity = dxl_wb_->convertVelocity2Value(state->id, pt.velocities[0]);
-      state->remaining_pos = jnt_tra_msg_->points.size();
+      writeSetVals(used_states[i], pt.positions[i], pt.velocities[i], jnt_tra_msg_->points.size());
     }
   }
 
-  // Remaining points, motors where they should be
+  // There are more points remaining and the motors are at their set positions
   if (!jnt_tra_msg_->points.empty() && this->dynsAtSetPositions())
   {
     jnt_tra_msg_->points.erase(jnt_tra_msg_->points.begin());
 
     ROS_INFO_STREAM("Done with a move");
 
-    if (!jnt_tra_msg_->joint_names.empty() && !jnt_tra_msg_->points.empty())
+    // Save a cycle, set the new position now
+    if (!jnt_tra_msg_->points.empty())
     {
       auto pt = jnt_tra_msg_->points.front();
-      auto *state = this->getJointState(jnt_tra_msg_->joint_names.front());
-      if (state)
+      for (int i = 0; i < used_states.size(); i++)
       {
-        state->set_position = dxl_wb_->convertRadian2Value(state->id, pt.positions[0]);
-        state->set_velocity = dxl_wb_->convertVelocity2Value(state->id, pt.velocities[0]);
-        state->remaining_pos = jnt_tra_msg_->points.size();
+        writeSetVals(used_states[i], pt.positions[i], pt.velocities[i], jnt_tra_msg_->points.size());
       }
     }
   }
 
   if (jnt_tra_msg_->points.empty())
   {
+    // Reset them all to 0, won't hurt anything
     for (auto &state : states)
       state.remaining_pos = 0;
   }
 
+  // Need simpler data structs for the sdk calls
   for (auto &state : states)
   {
     id_array.push_back(state.id);
@@ -557,6 +561,16 @@ bool DynamixelPositionController::dynsAtSetPositions()
       return false;
   }
   return true;
+}
+
+bool DynamixelPositionController::dynsAtSetPositions(const std::vector<StateMsg *> states)
+{
+  for (auto *state : states)
+  {
+    auto tol = dxl_wb_->convertRadian2Value(state->id, position_tol_);
+    if (abs(state->present_position - state->set_position) > tol)
+      return false;
+  }
 }
 
 int main(int argc, char **argv)

@@ -59,11 +59,9 @@ typedef struct
 using StateMsg = dynamixel_workbench_msgs::DynamixelStatePos;
 using StateListMsg = dynamixel_workbench_msgs::DynamixelStatePosList;
 class DynamixelPositionController
-{ 
+{
 
 private:
-  
-
   // ROS NodeHandle
   ros::NodeHandle node_handle_;
   ros::NodeHandle priv_node_handle_;
@@ -76,7 +74,7 @@ private:
 
   // ROS Topic Subscriber
   ros::Subscriber trajectory_sub_;
-  ros::Subscriber move_sub_;  //For testing
+  ros::Subscriber move_sub_; //For testing
 
   // ROS Service Server
   ros::ServiceServer dynamixel_command_server_;
@@ -133,7 +131,7 @@ public:
   void readCallback(const ros::TimerEvent &);
   void writeCallback(const ros::TimerEvent &);
   void publishCallback(const ros::TimerEvent &);
-  
+
   void trajectoryMsgCallback(const trajectory_msgs::JointTrajectory::ConstPtr &msg);
   bool dynamixelCommandMsgCallback(dynamixel_workbench_msgs::DynamixelCommand::Request &req,
                                    dynamixel_workbench_msgs::DynamixelCommand::Response &res);
@@ -141,8 +139,10 @@ public:
   void moveCallback(const std_msgs::Float64::ConstPtr &msg);
 
   bool dynsAtSetPositions();
-  void updateSetPositions(const std::vector<uint8_t> &id_array, const std::vector<int32_t> &dynamixel_position);
-  
+  bool dynsAtSetPositions(const std::vector<StateMsg *> states);
+  //void updateSetPositions(const std::vector<uint8_t> &id_array, const std::vector<int32_t> &dynamixel_position);
+
+  bool writeSetVals(StateMsg *state, double pos, double vel, int remaining_pos);
 
   StateMsg *getJointState(const std::string &name);
 };
