@@ -30,7 +30,7 @@
 #include <trajectory_msgs/JointTrajectoryPoint.h>
 
 #include <dynamixel_workbench_toolbox/dynamixel_workbench.h>
-#include <dynamixel_workbench_msgs/DynamixelStateList.h>
+#include <dynamixel_workbench_msgs/DynamixelStatePosList.h>
 #include <dynamixel_workbench_msgs/DynamixelCommand.h>
 
 #include <mutex>
@@ -51,9 +51,14 @@ typedef struct
   int32_t value;
 } ItemValue;
 
+using StateMsg = dynamixel_workbench_msgs::DynamixelStatePos;
+using StateListMsg = dynamixel_workbench_msgs::DynamixelStatePosList;
 class DynamixelPositionController
-{
+{ 
+
 private:
+  
+
   // ROS NodeHandle
   ros::NodeHandle node_handle_;
   ros::NodeHandle priv_node_handle_;
@@ -79,7 +84,7 @@ private:
   std::map<std::string, uint32_t> dynamixel_;
   std::map<std::string, const ControlItem *> control_items_;
   std::vector<std::pair<std::string, ItemValue>> dynamixel_info_;
-  dynamixel_workbench_msgs::DynamixelStateList dynamixel_state_list_;
+  StateListMsg dynamixel_state_list_;
   sensor_msgs::JointState joint_state_msg_;
 
   double position_tol_;
@@ -131,7 +136,7 @@ public:
   bool dynsAtSetPositions();
   void updateSetPositions(const std::vector<uint8_t> &id_array, const std::vector<int32_t> &dynamixel_position);
 
-  dynamixel_workbench_msgs::DynamixelState &getJointState(const std::string &name);
+  StateMsg &getJointState(const std::string &name);
 };
 
 #endif //DYNAMIXEL_POSITION_CONTROL_H

@@ -108,7 +108,7 @@ bool DynamixelPositionController::loadDynamixels(void)
     }
     else
     {
-      dynamixel_workbench_msgs::DynamixelState state;
+      StateMsg state;
       state.name = dxl.first;
       state.id = dxl.second;
       dynamixel_state_list_.dynamixel_state.push_back(state);
@@ -247,7 +247,7 @@ bool DynamixelPositionController::initSDKHandlers(void)
 
 void DynamixelPositionController::initPublisher()
 {
-  dynamixel_state_list_pub_ = priv_node_handle_.advertise<dynamixel_workbench_msgs::DynamixelStateList>("dynamixel_state", 100);
+  dynamixel_state_list_pub_ = priv_node_handle_.advertise<StateListMsg>("dynamixel_state", 100);
   joint_states_pub_ = priv_node_handle_.advertise<sensor_msgs::JointState>("joint_states", 100);
 }
 
@@ -495,13 +495,17 @@ void DynamixelPositionController::trajectoryMsgCallback(const trajectory_msgs::J
   this->traj_mtx_.unlock();
 }
 
-dynamixel_workbench_msgs::DynamixelState &DynamixelPositionController::getJointState(const std::string &name)
+StateMsg &DynamixelPositionController::getJointState(const std::string &name)
 {
   for (auto &state : dynamixel_state_list_.dynamixel_state)
   {
     if (state.name.compare(name) == 0)
       return state;
   }
+  std::stringstream ss;
+  ss << "getJointState failed.  No joint named " << name;
+
+  throw std::runtime_error(ss.str().c_str());
 }
 
 bool DynamixelPositionController::dynsAtSetPositions()
