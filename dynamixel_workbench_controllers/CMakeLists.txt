@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(dynamixel_workbench_controllers)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-add_compile_options(-std=c++11)
+add_compile_options(-std=c++14)
 
 ################################################################################
 # Find catkin packages and libraries for catkin and system dependencies
@@ -75,6 +75,10 @@ add_executable(dynamixel_workbench_controllers src/dynamixel_workbench_controlle
 add_dependencies(dynamixel_workbench_controllers ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(dynamixel_workbench_controllers ${catkin_LIBRARIES} ${Eigen3_LIBRARIES} ${YAML_CPP_LIBRARIES})
 
+add_executable(dynamixel_position_controller src/dynamixel_position_controller.cpp)
+add_dependencies(dynamixel_position_controller ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(dynamixel_position_controller ${catkin_LIBRARIES} ${Eigen3_LIBRARIES} ${YAML_CPP_LIBRARIES})
+
 add_executable(find_dynamixel src/find_dynamixel.cpp)
 add_dependencies(find_dynamixel ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(find_dynamixel ${catkin_LIBRARIES})
@@ -82,7 +86,7 @@ target_link_libraries(find_dynamixel ${catkin_LIBRARIES})
 #################################################################################
 ## Install
 #################################################################################
-install(TARGETS dynamixel_workbench_controllers find_dynamixel
+install(TARGETS dynamixel_workbench_controllers find_dynamixel dynamixel_position_controller
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
